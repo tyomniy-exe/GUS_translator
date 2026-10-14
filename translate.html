@@ -1,0 +1,1599 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Гусландский Переводчик</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a1a1c">
+
+    <!-- iOS PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Гусланд">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="icon" type="image/png" href="icon-192.png">
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --bg-overlay: rgba(20, 20, 22, 0.55);
+            --card-bg: rgba(255, 255, 255, 0.08);
+            --card-border: rgba(255, 255, 255, 0.15);
+            --text-primary: #f5f5f7;
+            --text-secondary: rgba(245, 245, 247, 0.65);
+            --text-muted: rgba(245, 245, 247, 0.4);
+            --accent: #ffffff;
+            --input-bg: rgba(255, 255, 255, 0.06);
+            --input-border: rgba(255, 255, 255, 0.12);
+            --input-focus: rgba(255, 255, 255, 0.35);
+            --radius: 16px;
+            --radius-sm: 12px;
+        }
+
+        html,
+        body {
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter',
+                Roboto, 'Helvetica Neue', Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            background-color: #1a1a1c;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            position: relative;
+            min-height: 100vh;
+            /* iOS safe area — для «брови» на iPhone */
+            padding-top: max(24px, env(safe-area-inset-top));
+            padding-bottom: max(24px, env(safe-area-inset-bottom));
+            padding-left: max(24px, env(safe-area-inset-left));
+            padding-right: max(24px, env(safe-area-inset-right));
+            overflow-x: hidden;
+        }
+
+        /* Поддержка dvh для новых устройств (iOS 15.4+) */
+        @supports (height: 100dvh) {
+            body {
+                min-height: 100dvh;
+            }
+        }
+
+        #bgCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            display: block;
+            pointer-events: none;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg-overlay);
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .card {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            max-width: 640px;
+            background: var(--card-bg);
+            -webkit-backdrop-filter: blur(24px) saturate(140%);
+            backdrop-filter: blur(24px) saturate(140%);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 40px 36px;
+            box-shadow:
+                0 20px 60px rgba(0, 0, 0, 0.35),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            animation: cardIn 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: box-shadow 0.4s ease, transform 0.4s ease, border-color 0.4s ease;
+        }
+
+        .card:hover {
+            box-shadow:
+                0 28px 80px rgba(0, 0, 0, 0.5),
+                0 0 0 1px rgba(255, 255, 255, 0.06),
+                inset 0 1px 0 rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.22);
+        }
+
+        @keyframes cardIn {
+            from {
+                opacity: 0;
+                transform: translateY(24px) scale(0.98);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+            animation: fadeIn 0.9s ease 0.15s both;
+        }
+
+        .header h1 {
+            font-size: 26px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+            animation: breathe 4s ease-in-out infinite;
+        }
+
+        @keyframes breathe {
+
+            0%,
+            100% {
+                opacity: 1;
+                text-shadow: 0 0 0 rgba(255, 255, 255, 0);
+            }
+
+            50% {
+                opacity: 0.92;
+                text-shadow: 0 0 18px rgba(255, 255, 255, 0.15);
+            }
+        }
+
+        .header p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            letter-spacing: 0.01em;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .field {
+            margin-bottom: 18px;
+            animation: fadeIn 0.9s ease 0.25s both;
+        }
+
+        .field:nth-of-type(2) {
+            animation-delay: 0.4s;
+        }
+
+        .field label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            transition: color 0.3s ease;
+        }
+
+        .field:focus-within label {
+            color: var(--text-primary);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 110px;
+            padding: 14px 16px;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 15px;
+            line-height: 1.5;
+            resize: vertical;
+            transition: border-color 0.3s ease,
+                background 0.3s ease,
+                box-shadow 0.3s ease,
+                transform 0.3s ease;
+            /* iOS: убираем внутренние тени */
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        textarea::placeholder {
+            color: var(--text-muted);
+            transition: color 0.3s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--input-focus);
+            background: rgba(255, 255, 255, 0.09);
+            box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.04);
+            transform: translateY(-1px);
+        }
+
+        textarea:focus::placeholder {
+            color: rgba(245, 245, 247, 0.25);
+        }
+
+        .btn {
+            position: relative;
+            width: 100%;
+            padding: 14px 20px;
+            margin: 4px 0 20px;
+            background: var(--accent);
+            color: #1a1a1c;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            cursor: pointer;
+            overflow: hidden;
+            -webkit-appearance: none;
+            appearance: none;
+            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+                opacity 0.25s ease,
+                box-shadow 0.3s ease;
+            animation: fadeIn 0.9s ease 0.35s both;
+        }
+
+        .btn::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at center, rgba(102, 126, 234, 0.25), transparent 70%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            pointer-events: none;
+        }
+
+        .btn:hover {
+            opacity: 0.96;
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(255, 255, 255, 0.18);
+        }
+
+        .btn:hover::after {
+            opacity: 1;
+        }
+
+        .btn:active {
+            transform: translateY(0) scale(0.99);
+            opacity: 0.9;
+        }
+
+        .output-wrapper {
+            position: relative;
+        }
+
+        .output {
+            min-height: 90px;
+            padding: 16px 16px 50px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--input-border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 15px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            transition: background 0.3s ease,
+                border-color 0.3s ease,
+                box-shadow 0.3s ease;
+            /* iOS: правильный перенос длинных слов */
+            -webkit-hyphens: auto;
+            hyphens: auto;
+        }
+
+        .output:not(:empty) {
+            animation: outputIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes outputIn {
+            from {
+                opacity: 0.4;
+                transform: translateY(4px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .output:empty::before {
+            content: 'Здесь появится перевод…';
+            color: var(--text-muted);
+        }
+
+        .output:hover {
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .copy-btn {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--input-border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(4px);
+            -webkit-appearance: none;
+            appearance: none;
+            transition: background 0.25s ease,
+                transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+                opacity 0.3s ease,
+                border-color 0.25s ease;
+        }
+
+        .copy-btn.visible {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+
+        .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .copy-btn:active {
+            transform: scale(0.96);
+        }
+
+        .copy-btn.copied {
+            background: rgba(120, 220, 160, 0.25);
+            border-color: rgba(120, 220, 160, 0.5);
+            color: #b8f5cf;
+        }
+
+        .copy-btn svg {
+            width: 13px;
+            height: 13px;
+            flex-shrink: 0;
+            transition: transform 0.3s ease;
+        }
+
+        .copy-btn:hover svg {
+            transform: rotate(-6deg) scale(1.1);
+        }
+
+        .stats {
+            text-align: center;
+            margin-top: 18px;
+            font-size: 11px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            animation: fadeIn 1s ease 0.5s both;
+            word-wrap: break-word;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 16px;
+                padding-top: max(16px, env(safe-area-inset-top));
+                padding-bottom: max(16px, env(safe-area-inset-bottom));
+                align-items: center;
+            }
+
+            .card {
+                padding: 28px 22px;
+                border-radius: 20px;
+            }
+
+            .header {
+                margin-bottom: 24px;
+            }
+
+            .header h1 {
+                font-size: 22px;
+            }
+
+            textarea {
+                min-height: 96px;
+                font-size: 16px;
+            }
+
+            .output {
+                font-size: 15px;
+            }
+
+            .btn {
+                padding: 15px 20px;
+                font-size: 16px;
+            }
+        }
+
+        @media (max-width: 380px) {
+            .card {
+                padding: 24px 18px;
+            }
+
+            .header h1 {
+                font-size: 20px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.001ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.001ms !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="bgCanvas"></canvas>
+
+    <main class="card">
+        <header class="header">
+            <h1>Гусландский переводчик</h1>
+            <p>Перевод с обычного русского на гусландский. ТГК: @kkrrxxsshh1</p>
+        </header>
+
+        <div class="field">
+            <label for="input">Исходный текст</label>
+            <textarea id="input" placeholder="Напиши здесь чото..."></textarea>
+        </div>
+
+        <button class="btn" id="translateBtn" type="button">Перевести</button>
+
+        <div class="field">
+            <label for="output">Результат</label>
+            <div class="output-wrapper">
+                <div class="output" id="output" aria-live="polite"></div>
+                <button class="copy-btn" id="copyBtn" type="button" aria-label="Скопировать">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <span id="copyBtnText">Скопировать</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="stats" id="stats"></div>
+    </main>
+
+    <script>
+        /* ============================================================
+           СЛОВАРЬ — вставь свой (он не меняется)
+           ============================================================ */
+        const DICTIONARY = [
+            {
+                slang: ["привит", "асаламалеку", "цао", "вассапинг", "кусобач"],
+                forms: ["привет", "здравствуй", "здравствуйте", "приветствую", "прив", "здароу", "здарова", "васап", "сап"]
+            },
+            {
+                slang: ["досвидоси", "потеряйся", "ди наху", "покадусик"],
+                forms: ["пока", "прощай", "до свидания", "покеда", "всем пока"]
+            },
+
+            // ===== ЛЮДИ =====
+            {
+                slang: ["анюта", "плитка", "ксюшка"],
+                forms: ["шлюха", "дырка", "дыра"]
+            },
+            {
+                slang: ["анюту", "плитку", "ксюшку"],
+                forms: ["шлюху", "дырку", "дыру"]
+            },
+            {
+                slang: ["анюте", "плитке", "ксюшке"],
+                forms: ["шлюхе", "дырке", "дыре"]
+            },
+            {
+                slang: ["анютой", "плиткой", "ксюшкой"],
+                forms: ["шлюхой", "дыркой", "дырой"]
+            },
+            {
+                slang: ["анюты", "плитки", "ксюшки"],
+                forms: ["шлюхи", "дырки", "дыры"]
+            },
+            {
+                slang: ["анютам", "плиткам", "ксюшкам"],
+                forms: ["шлюхам", "дыркам", "дырам"]
+            },
+            {
+                slang: ["анют", "плиток", "ксюш"],
+                forms: ["шлюх", "дырок", "дыр"]
+            },
+            {
+                slang: ["нигагай"],
+                forms: ["негр", "черный", "чёрный"]
+            },
+            {
+                slang: ["нигагая"],
+                forms: ["негра", "черного", "чёрного"]
+            },
+            {
+                slang: ["нигагаю"],
+                forms: ["негру", "черному", "чёрному"]
+            },
+            {
+                slang: ["нигагаи"],
+                forms: ["негры", "черные", "чёрные"]
+            },
+            {
+                slang: ["нигагаев"],
+                forms: ["негров", "черных", "чёрных"]
+            },
+            {
+                slang: ["ай гач ю", "гач ю"],
+                forms: ["понял", "а понял", "пон", "понятно", "поняли", "поняла", "понятн", "услышал"]
+            },
+            {
+                slang: ["самка", "сучко", "шлюшка"],
+                forms: ["девушка", "девчонка", "девочка", "женщина", "малышка"]
+            },
+            {
+                slang: ["самки", "сучки", "шлюшки"],
+                forms: ["девушки", "девчонки", "девочки", "женщины", "малышки"]
+            },
+            {
+                slang: ["самкой", "сучкой", "шлюшкой"],
+                forms: ["девушкой", "девчонкой", "девочкой", "женщиной", "малышкой"]
+            },
+
+            // ===== ВОЙНА / АРМАН =====
+            {
+                slang: ["вэвэгэ"],
+                forms: ["война", "войну", "войны", "войне", "войной", "воюем", "воевать", "воюю", "воюют"]
+            },
+            {
+                slang: ["арнан", "амам"],
+                forms: ["арман"]
+            },
+            {
+                slang: ["арнану", "амаму"],
+                forms: ["арману"]
+            },
+            {
+                slang: ["арнана", "амама"],
+                forms: ["армана"]
+            },
+            {
+                slang: ["арнаном", "амамом"],
+                forms: ["арманом"]
+            },
+
+            // ===== ЧИСЛА =====
+            {
+                slang: ["цеце"],
+                forms: ["один", "1"]
+            },
+            {
+                slang: ["ддо"],
+                forms: ["два", "2"]
+            },
+            {
+                slang: ["тьр'и"],
+                forms: ["три", "3"]
+            },
+
+            // ===== ИМЕНА =====
+            {
+                slang: ["артемишин", "артёмишен"],
+                forms: ["артем", "артём", "мишин", "артём"]
+            },
+            {
+                slang: ["артемишине", "артёмишене"],
+                forms: ["мишине", "артёме", "артеме"]
+            },
+            {
+                slang: ["артемишина", "артёмишена"],
+                forms: ["артема", "артёма"]
+            },
+            {
+                slang: ["артемишину", "артёмишену"],
+                forms: ["артему", "артёму"]
+            },
+            {
+                slang: ["артемишином", "артёмишеном"],
+                forms: ["артемом", "артёмом"]
+            },
+            {
+                slang: ["шамик"],
+                forms: ["шамиль"]
+            },
+            {
+                slang: ["шамика"],
+                forms: ["шамиля"]
+            },
+            {
+                slang: ["шамику"],
+                forms: ["шамилю"]
+            },
+            {
+                slang: ["шамиком"],
+                forms: ["шамилем"]
+            },
+            {
+                slang: ["шамике"],
+                forms: ["шамилем"]
+            },
+            {
+                slang: ["глеп", "глепик"],
+                forms: ["глеб"]
+            },
+            {
+                slang: ["глепа", "глепика"],
+                forms: ["глеба"]
+            },
+            {
+                slang: ["глепу", "глепику"],
+                forms: ["глебу"]
+            },
+            {
+                slang: ["глепом", "глепиком"],
+                forms: ["глебом"]
+            },
+            {
+                slang: ["глепе", "глепике"],
+                forms: ["глебе"]
+            },
+            {
+                slang: ["гиблер", "гиблик"],
+                forms: ["гитлер"]
+            },
+            {
+                slang: ["попа"],
+                forms: ["тренер", "физрук"]
+            },
+            {
+                slang: ["попы"],
+                forms: ["тренера", "физрука"]
+            },
+            {
+                slang: ["попе"],
+                forms: ["тренеру", "физруку"]
+            },
+            {
+                slang: ["попой"],
+                forms: ["тренером", "физруком"]
+            },
+            {
+                slang: ["попе"],
+                forms: ["тренере", "физруке"]
+            },
+
+            // ===== ЕДА / ПИТЬЁ =====
+            {
+                slang: ["ахуена"],
+                forms: ["ванна с пеной", "ванной с пеной", "ванная с пеной", "ваны с пеной", "ванны с пеной", "ванне с пеной", "ване с пеной"]
+            },
+            {
+                slang: ["конфэтк"],
+                forms: ["конфета", "конфетки", "конфеты", "конфетка", "конфету", "конфетку"]
+            },
+            {
+                slang: ["кальмар"],
+                forms: ["доставщик", "курьер"]
+            },
+            {
+                slang: ["кальмарить"],
+                forms: ["доставлять"]
+            },
+
+            {
+                slang: ["завоз", "завозик", "завозо"],
+                forms: ["круто"]
+            },
+            {
+                slang: ["рофлитор", "рофлик"],
+                forms: ["рофл", "рофлить", "рофлил", "рофлила", "рофле", "рофлу"]
+            },
+            {
+                slang: ["кальмарит"],
+                forms: ["доставляет"]
+            },
+            {
+                slang: ["кальмарят"],
+                forms: ["доставляют"]
+            },
+            {
+                slang: ["базурма"],
+                forms: ["шаурма", "шавуха", "шаурмечная"]
+            },
+            {
+                slang: ["базурмой"],
+                forms: ["шаурмой", "шавухой", "шаумречной"]
+            },
+            {
+                slang: ["базурмы"],
+                forms: ["шаурмы", "шавухи", "шаурмечки"]
+            },
+            {
+                slang: ["базурме"],
+                forms: ["шаурме", "шавухе", "шаурмечке"]
+            },
+            {
+                slang: ["хазелнат", "хазелнатик"],
+                forms: ["кофе", "кофеёк", "кофеек", "кофейку", "кофешка"]
+            },
+            {
+                slang: ["чипси"],
+                forms: ["чипсы", "чипсики", "чипсиков", "чипсов", "чипсам", "чипсами", "чипсах"]
+            },
+            {
+                slang: ["худик"],
+                forms: ["пиво"]
+            },
+            {
+                slang: ["худиком"],
+                forms: ["пивом"]
+            },
+            {
+                slang: ["худика"],
+                forms: ["пива"]
+            },
+            {
+                slang: ["худике"],
+                forms: ["пиве"]
+            },
+            {
+                slang: ["попитр", "попитрик"],
+                forms: ["бутылка", "бутылки", "бутылку", "бутылкой", "бутылке", "пить", "попить"]
+            },
+
+            // ===== ОПАСНОСТЬ / СТРАХ =====
+            {
+                slang: ["чирип"],
+                forms: ["опасность", "опасности", "опасностью", "опасен", "опасный", "опасная", "страх", "страшно", "опасно"]
+            },
+            {
+                slang: ["бентеновцы"],
+                forms: ["скулшутеры", "скул шутеры", "бандиты", "маньяки", "убийцы"]
+            },
+            {
+                slang: ["бентеновец"],
+                forms: ["скулшутер", "скул шутер", "бандит", "маньяк", "убийца"]
+            },
+
+            // ===== ТРАНСПОРТ =====
+            {
+                slang: ["валяс"],
+                forms: ["велосипед", "велик"]
+            },
+            {
+                slang: ["валясе"],
+                forms: ["велосипеде", "велике"]
+            },
+            {
+                slang: ["валясы"],
+                forms: ["велосипеды", "велики"]
+            },
+            {
+                slang: ["валяса"],
+                forms: ["велосипеда", "велика"]
+            },
+            {
+                slang: ["валясу"],
+                forms: ["велосипеду", "велику"]
+            },
+            {
+                slang: ["валясов"],
+                forms: ["велосипедов", "великов"]
+            },
+            {
+                slang: ["трачк"],
+                forms: ["мопед", "мопеда", "мопеду", "мопедом", "мопеде", "мопеды", "мопедов"]
+            },
+
+            // ===== ПАРЕНЬ (ВАЦ) =====
+            {
+                slang: ["вац", "вацок", "вацуля", "вацокич", "вацоцо", "ватцон", "вацулин"],
+                forms: ["парень", "пацан"]
+            },
+            {
+                slang: ["ваца", "вацка", "вацуля", "вацокича", "вацоцо", "ватцона", "вацули"],
+                forms: ["парня", "пацана"]
+            },
+            {
+                slang: ["ваци", "вацки", "вацули", "вацокичи", "вацоцо", "ватцони", "вацули"],
+                forms: ["парни", "пацаны"]
+            },
+            {
+                slang: ["вацу", "вацку", "вацуле", "вацокичу", "вацоцо", "ватцону", "вацуле"],
+                forms: ["парню", "пацану"]
+            },
+            {
+                slang: ["вацами", "вацками", "вацулями", "вацокичами", "вацоцами", "ватцонами", "вацулями"],
+                forms: ["парнями", "пацанами"]
+            },
+
+            // ===== МЕСТА / ОБЪЕКТЫ =====
+            {
+                slang: ["вгоради"],
+                forms: ["город", "в гораде", "в городе", "города"]
+            },
+            {
+                slang: ["вазик"],
+                forms: ["пузырь", "пузырик"]
+            },
+            {
+                slang: ["вазики"],
+                forms: ["пузыри", "пузырики", "пузырям", "пузырей", "пузырьчики"]
+            },
+            {
+                slang: ["вазик"],
+                forms: ["пузырь", "пузырик", "пузырчик", "пузырьчик"]
+            },
+            {
+                slang: ["чибарик", "чибарикi"],
+                forms: ["сарай", "сарая", "сараю", "сараем", "сарае", "сараи", "сараев"]
+            },
+            {
+                slang: ["гулятор"],
+                forms: ["гулять", "гуляете", "гуляем", "гуляют", "погуляем", "погулять"]
+            },
+            {
+                slang: ["зозиро"],
+                forms: ["озеро", "озера", "озёра", "озер", "озёр", "погулять"]
+            },
+            {
+                slang: ["зоби"],
+                forms: ["зомби", "зомбак", "зомбака", "зомбаки", "зомбаками", "зомбаком", "зомбакам", "пьяный", "пьяные", "пьяным", "пьяными", "пьяных", "пьяного", "пьяному"]
+            },
+            {
+                slang: ["ммммм"],
+                forms: ["альпака", "альпако", "лама"]
+            },
+            {
+                slang: ["сигарчики"],
+                forms: ["сигареты"]
+            },
+            {
+                slang: ["сигарчик"],
+                forms: ["сигарета"]
+            },
+            {
+                slang: ["сигарчиков"],
+                forms: ["сигарет"]
+            },
+            {
+                slang: ["сигарчику"],
+                forms: ["сигарету"]
+            },
+            {
+                slang: ["сигарчике"],
+                forms: ["сигарете"]
+            },
+            {
+                slang: ["губер", "чигубер"],
+                forms: ["бургер"]
+            },
+            {
+                slang: ["губеры", "чигуберы"],
+                forms: ["бургеры"]
+            },
+            {
+                slang: ["губерами", "чигуберами"],
+                forms: ["бургерами"]
+            },
+            {
+                slang: ["губеров", "чигуберов"],
+                forms: ["бургеров"]
+            },
+            {
+                slang: ["губера", "чигубера"],
+                forms: ["бургера"]
+            },
+            {
+                slang: ["губере", "чигубере"],
+                forms: ["бургере"]
+            },
+            {
+                slang: ["губером", "чигубером"],
+                forms: ["бургером"]
+            },
+
+            // ===== СЛОВА-СВЯЗКИ =====
+            {
+                slang: ["кароч", "кароч делакноч"],
+                forms: ["короче", "крч", "в общем", "коротко"]
+            },
+            {
+                slang: ["що"],
+                forms: ["чо", "что", "шо", "а", "че", "чё"]
+            },
+            {
+                slang: ["ви"],
+                forms: ["вы"]
+            },
+            {
+                slang: ["пушо", "пушт"],
+                forms: ["потому", "потому что", "потому, что", "потомучто"]
+            },
+            {
+                slang: ["з"],
+                forms: ["с"]
+            },
+            {
+                slang: ["ета"],
+                forms: ["это", "эта", "этот", "этому", "этой", "этим", "этими"]
+            },
+            {
+                slang: ["чучутор"],
+                forms: ["чуть", "чутьчуть", "чуть-чуть", "чуточку", "немного"]
+            },
+            {
+                slang: ["хуизат"],
+                forms: ["кто", "ты откуда", "незванный гость", "незванный"]
+            },
+
+            {
+                slang: ["мусораб", "полицай"],
+                forms: ["полицейский", "мент", "мусор", "ментура", "ментовка"]
+            },
+            {
+                slang: ["мусораба", "полицайа"],
+                forms: ["полицейского", "мента", "мусора", "ментуры", "ментовки"]
+            },
+            {
+                slang: ["мусорабу", "полицайу"],
+                forms: ["полицейскому", "менту", "мусору",]
+            },
+            {
+                slang: ["мусорабе", "полицае"],
+                forms: ["полицейском", "менте", "мусоре", "ментуре", "ментовке"]
+            },
+
+            {
+                slang: ["мусорабы", "полицаи"],
+                forms: ["полицейские", "менты", "мусора"]
+            },
+
+            {
+                slang: ["батаник плюзминуз", "преумный"],
+                forms: ["умный"]
+            },
+            {
+                slang: ["батаником плюзминуз", "преумным"],
+                forms: ["умным"]
+            },
+            {
+                slang: ["батанико плюзминузно", "преумно"],
+                forms: ["умно"]
+            },
+            {
+                slang: ["батаника плюзминуз", "преумныого"],
+                forms: ["умного"]
+            },
+            {
+                slang: ["батаники плюзминуз", "преумные"],
+                forms: ["умные"]
+            },
+            {
+                slang: ["батаников плюзминуз", "преумных"],
+                forms: ["умных"]
+            },
+            {
+                slang: ["батаникоми плюзминуз", "преумными"],
+                forms: ["умными"]
+            },
+            {
+                slang: ["поварас", "поварасик"],
+                forms: ["повар", "повара", "повару", "поваром", "поваре", "повары", "поваров", "поварам", "поварами"]
+            },
+            {
+                slang: ["темозо", "темозик"],
+                forms: ["темка", "тема", "темки", "темы", "темке", "теме", "темку", "тему", "темкой", "темой"]
+            },
+            {
+                slang: ["родип", "родипi", "пидар", "раман"],
+                forms: ["пидор", "пидорас", "пидора", "пидору", "пидором", "пидоре", "пидоры", "пидоров", "роман", "рома", "романцов"]
+            },
+            {
+                slang: ["чигма", "ле чигма"],
+                forms: ["сигма", "сигмы", "сигме", "сигму", "сигмой", "сигмен"]
+            },
+            {
+                slang: ["оудаб", "оудабик"],
+                forms: ["да", "ага", "угу", "конечно", "естественно", "согл", "согласен", "подтверждаю"]
+            },
+            {
+                slang: ["летсдудик", "летс дудик"],
+                forms: ["давай", "давайте", "погнали", "поехали", "пошли", "пойдем", "пойдемте", "побежали"]
+            },
+            {
+                slang: ["хавать"],
+                forms: ["кушать", "поесть", "покушать", "кушаю", "ем", "поем", "покушаю"]
+            },
+            {
+                slang: ["хавчик"],
+                forms: ["еда"]
+            },
+            {
+                slang: ["хавчик"],
+                forms: ["еду"]
+            },
+            {
+                slang: ["хавчике"],
+                forms: ["еде"]
+            },
+            {
+                slang: ["хавчиком"],
+                forms: ["едой"]
+            },
+            {
+                slang: ["хавчика"],
+                forms: ["еды"]
+            },
+            {
+                slang: ["вылетатор"],
+                forms: ["выйти", "выйду", "выйдут", "пойдут", "идем", "выйдем", "выход"]
+            },
+            {
+                slang: ["ебашмачить"],
+                forms: ["ебашить"]
+            },
+            {
+                slang: ["ебашмачу"],
+                forms: ["ебашу"]
+            },
+            {
+                slang: ["ебашмачат"],
+                forms: ["ебашат"]
+            },
+            {
+                slang: ["ебашмачит"],
+                forms: ["ебашит"]
+            },
+
+            {
+                slang: ["севастьян"],
+                forms: ["свастика", "свастон"]
+            },
+
+            {
+                slang: ["севастьяна"],
+                forms: ["свастики", "свастона"]
+            },
+            {
+                slang: ["севастьяну"],
+                forms: ["свастике", "свастону"]
+            },
+            {
+                slang: ["севастьяном"],
+                forms: ["свастикой", "свастоном"]
+            },
+            {
+                slang: ["севастьяне"],
+                forms: ["свастике", "свастоне"]
+            },
+            {
+                slang: ["дрочилить"],
+                forms: ["делать", "поделать"]
+            },
+            {
+                slang: ["дрочилил"],
+                forms: ["делал", "поделал"]
+            },
+            {
+                slang: ["дрочилила"],
+                forms: ["делала", "поделала"]
+            },
+            {
+                slang: ["дрочилили"],
+                forms: ["делали", "поделали"]
+            },
+            {
+                slang: ["сдрочилить"],
+                forms: ["сделать"]
+            },
+            {
+                slang: ["сдрочилил"],
+                forms: ["сделал"]
+            },
+            {
+                slang: ["сдрочилила"],
+                forms: ["сделала"]
+            },
+            {
+                slang: ["сдрочилило"],
+                forms: ["сделало"]
+            },
+
+            {
+                slang: ["сдрочилили"],
+                forms: ["сделали"]
+            },
+            {
+                slang: ["дрочилятся"],
+                forms: ["делаются"]
+            },
+
+            // ===== ГЕОГРАФИЯ =====
+            {
+                slang: ["украиня"],
+                forms: ["россия"]
+            },
+            {
+                slang: ["украиной"],
+                forms: ["россией"]
+            },
+            {
+                slang: ["украины"],
+                forms: ["россии"]
+            },
+            {
+                slang: ["украине"],
+                forms: ["россии"]
+            },
+            {
+                slang: ["украину"],
+                forms: ["россии"]
+            },
+            {
+                slang: ["немция", "немеция"],
+                forms: ["германия"]
+            },
+            {
+                slang: ["немции", "немеции"],
+                forms: ["германии"]
+            },
+            {
+                slang: ["немцию", "немецию"],
+                forms: ["германию"]
+            },
+            {
+                slang: ["немцией", "немецией"],
+                forms: ["германией"]
+            },
+        ];
+
+        /* ============================================================
+           НАСТРОЙКИ
+           ============================================================ */
+        const PREFIXES = ["лe ", "ай дa "];
+        const PREFIX_CHANCE = 0.1;
+        const E_I_CHANCE = 0.2;
+
+        /* ============================================================
+           ЗАМЕНА БУКВ е→i, и→i (без for...of — только индекс)
+           ============================================================ */
+        function applyEI(text) {
+            if (!text) return '';
+            var result = '';
+            for (var i = 0; i < text.length; i++) {
+                var ch = text.charAt(i);
+                var lower = ch.toLowerCase();
+                if ((lower === 'е' || lower === 'и') && Math.random() < E_I_CHANCE) {
+                    result += (ch === lower) ? 'i' : 'I';
+                } else {
+                    result += ch;
+                }
+            }
+            return result;
+        }
+
+        /* ============================================================
+           ЛОГИКА — без lookbehind, без for...of, без стрелок
+           ============================================================ */
+        var LOOKUP = new Map();
+        for (var di = 0; di < DICTIONARY.length; di++) {
+            var entry = DICTIONARY[di];
+            var variants = Array.isArray(entry.slang) ? entry.slang : [entry.slang];
+            for (var fi = 0; fi < entry.forms.length; fi++) {
+                LOOKUP.set(entry.forms[fi].toLowerCase(), variants);
+            }
+        }
+
+        var SORTED_KEYS = Array.from(LOOKUP.keys()).sort(function (a, b) {
+            return b.length - a.length;
+        });
+
+        var lastPick = new Map();
+        function pickVariant(variants, key) {
+            if (variants.length === 1) return variants[0];
+            var last = lastPick.get(key);
+            var chosen;
+            var attempts = 0;
+            do {
+                chosen = variants[Math.floor(Math.random() * variants.length)];
+                attempts++;
+            } while (chosen === last && attempts < 10);
+            lastPick.set(key, chosen);
+            return chosen;
+        }
+
+        function matchCase(translated, original) {
+            if (!original) return translated;
+            if (original === original.toUpperCase() && original.length > 1 && /[А-ЯЁA-Z]/.test(original)) {
+                return translated.toUpperCase();
+            }
+            if (original.charAt(0) === original.charAt(0).toUpperCase() &&
+                original.charAt(0) !== original.charAt(0).toLowerCase()) {
+                return translated.charAt(0).toUpperCase() + translated.slice(1);
+            }
+            return translated;
+        }
+
+        function escapeRegex(str) {
+            return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function isLetter(ch) {
+            if (!ch) return false;
+            return /[а-яёa-z]/i.test(ch);
+        }
+
+        function translate(text) {
+            if (!text) return '';
+            var result = text;
+
+            for (var k = 0; k < SORTED_KEYS.length; k++) {
+                var key = SORTED_KEYS[k];
+                var variants = LOOKUP.get(key);
+                var escaped = escapeRegex(key);
+                // Без lookbehind — совместимо со всеми Safari
+                var regex = new RegExp(escaped, 'gi');
+
+                result = result.replace(regex, function (match, offset, fullStr) {
+                    // Ручная проверка границ слова
+                    var before = offset > 0 ? fullStr.charAt(offset - 1) : '';
+                    var after = fullStr.charAt(offset + match.length) || '';
+
+                    if (isLetter(before) || isLetter(after)) {
+                        return match; // часть другого слова — не трогаем
+                    }
+
+                    var chosen = pickVariant(variants, key);
+                    if (Math.random() < PREFIX_CHANCE) {
+                        var prefix = PREFIXES[Math.floor(Math.random() * PREFIXES.length)];
+                        chosen = prefix + chosen;
+                    }
+                    return matchCase(chosen, match);
+                });
+            }
+
+            result = applyEI(result);
+            return result;
+        }
+
+        /* ============================================================
+           UI
+           ============================================================ */
+        var inputEl = document.getElementById('input');
+        var outputEl = document.getElementById('output');
+        var btn = document.getElementById('translateBtn');
+        var statsEl = document.getElementById('stats');
+        var copyBtn = document.getElementById('copyBtn');
+        var copyBtnText = document.getElementById('copyBtnText');
+
+        statsEl.textContent = 'Словарь: ' + LOOKUP.size + ' форм · ' + DICTIONARY.length + ' сленговых выражений';
+
+        function updateCopyBtn() {
+            if (outputEl.textContent.trim()) {
+                copyBtn.classList.add('visible');
+            } else {
+                copyBtn.classList.remove('visible');
+            }
+        }
+
+        function restartOutputAnimation() {
+            outputEl.style.animation = 'none';
+            void outputEl.offsetWidth;
+            outputEl.style.animation = '';
+        }
+
+        btn.addEventListener('click', function () {
+            var text = inputEl.value;
+            if (!text.trim()) {
+                outputEl.textContent = '';
+                updateCopyBtn();
+                return;
+            }
+            outputEl.textContent = translate(text);
+            restartOutputAnimation();
+            updateCopyBtn();
+        });
+
+        inputEl.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') btn.click();
+        });
+
+        inputEl.addEventListener('input', function () {
+            if (inputEl.value.trim()) {
+                outputEl.textContent = translate(inputEl.value);
+            } else {
+                outputEl.textContent = '';
+            }
+            updateCopyBtn();
+        });
+
+        /* ============================================================
+           КНОПКА "СКОПИРОВАТЬ" — с fallback для iOS
+           ============================================================ */
+        function markCopied() {
+            copyBtn.classList.add('copied');
+            copyBtnText.textContent = 'Скопировано';
+            setTimeout(function () {
+                copyBtn.classList.remove('copied');
+                copyBtnText.textContent = 'Скопировать';
+            }, 1500);
+        }
+
+        function fallbackCopy(text) {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.top = '0';
+            ta.style.left = '0';
+            ta.style.width = '1px';
+            ta.style.height = '1px';
+            ta.style.opacity = '0';
+            ta.style.fontSize = '16px'; // чтобы iOS не зумил
+            ta.setAttribute('readonly', '');
+            document.body.appendChild(ta);
+
+            // ВАЖНО для iOS: сохраняем текущее выделение
+            var selection = document.getSelection();
+            var originalRange = null;
+            if (selection && selection.rangeCount > 0) {
+                originalRange = selection.getRangeAt(0);
+            }
+
+            ta.focus();
+            ta.select();
+            ta.setSelectionRange(0, text.length);
+
+            var ok = false;
+            try {
+                ok = document.execCommand('copy');
+            } catch (e) {
+                ok = false;
+            }
+
+            document.body.removeChild(ta);
+
+            // Восстанавливаем выделение
+            if (originalRange && selection) {
+                selection.removeAllRanges();
+                selection.addRange(originalRange);
+            }
+
+            if (ok) {
+                markCopied();
+            } else {
+                // Совсем уж fallback — показать alert с текстом
+                alert('Не удалось скопировать автоматически. Выдели текст вручную.');
+            }
+        }
+
+        copyBtn.addEventListener('click', function () {
+            var text = outputEl.textContent;
+            if (!text) return;
+
+            // Пробуем современный API
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function () {
+                    markCopied();
+                })['catch'](function () {
+                    fallbackCopy(text);
+                });
+            } else {
+                fallbackCopy(text);
+            }
+        });
+
+        /* ============================================================
+           ФОН: ПАДАЮЩИЕ ИКОНКИ 192×192
+           ============================================================ */
+        (function initBg() {
+            var canvas = document.getElementById('bgCanvas');
+            if (!canvas || !canvas.getContext) return;
+            var ctx = canvas.getContext('2d');
+
+            var dpr = window.devicePixelRatio || 1;
+            var W = 0, H = 0;
+            var icons = [];
+            var ICON_COUNT = 20;
+            var iconImage = new Image();
+            var iconLoaded = false;
+
+            // Загружаем иконку. Она используется как источник для падающих элементов
+            iconImage.onload = function () {
+                iconLoaded = true;
+            };
+            iconImage.onerror = function () {
+                // Иконки нет — фон останется пустым (без квадратов)
+                iconLoaded = false;
+            };
+            iconImage.src = 'icon-192.png';
+
+            function resize() {
+                dpr = window.devicePixelRatio || 1;
+                W = window.innerWidth;
+                H = window.innerHeight;
+                canvas.width = Math.floor(W * dpr);
+                canvas.height = Math.floor(H * dpr);
+                canvas.style.width = W + 'px';
+                canvas.style.height = H + 'px';
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            }
+
+            function createIcon(initial) {
+                var size = 40 + Math.random() * 60; // 40-100 px
+                return {
+                    x: Math.random() * W,
+                    y: initial ? Math.random() * H : -size - Math.random() * 200,
+                    size: size,
+                    speed: 0.3 + Math.random() * 1.1,
+                    rotation: Math.random() * Math.PI * 2,
+                    rotationSpeed: (Math.random() - 0.5) * 0.02,
+                    opacity: 0.06 + Math.random() * 0.16,
+                    drift: (Math.random() - 0.5) * 0.3,
+                    wobble: Math.random() * Math.PI * 2,
+                    wobbleSpeed: 0.005 + Math.random() * 0.01
+                };
+            }
+
+            function initIcons() {
+                icons = [];
+                for (var i = 0; i < ICON_COUNT; i++) {
+                    icons.push(createIcon(true));
+                }
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, W, H);
+
+                if (iconLoaded) {
+                    for (var i = 0; i < icons.length; i++) {
+                        var s = icons[i];
+                        s.y += s.speed;
+                        s.x += s.drift;
+                        s.rotation += s.rotationSpeed;
+                        s.wobble += s.wobbleSpeed;
+
+                        if (s.y - s.size > H + 40) {
+                            icons[i] = createIcon(false);
+                            continue;
+                        }
+
+                        ctx.save();
+                        ctx.globalAlpha = s.opacity;
+                        ctx.translate(s.x, s.y);
+                        ctx.rotate(s.rotation);
+                        var scale = 0.9 + Math.sin(s.wobble) * 0.1;
+                        ctx.scale(scale, scale);
+                        ctx.drawImage(iconImage, -s.size / 2, -s.size / 2, s.size, s.size);
+                        ctx.restore();
+                    }
+                }
+
+                requestAnimationFrame(draw);
+            }
+
+            document.addEventListener('visibilitychange', function () {
+                // Ничего не делаем — draw() уже крутится через rAF, браузер сам
+                // приостанавливает rAF в фоне. Этого достаточно.
+            });
+
+            window.addEventListener('resize', function () {
+                resize();
+                initIcons();
+            });
+
+            resize();
+            initIcons();
+            draw();
+        })();
+
+        /* ============================================================
+           PWA: Service Worker (в try/catch — на iOS в Safari не работает)
+           ============================================================ */
+        try {
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function () {
+                    navigator.serviceWorker.register('sw.js')['catch'](function (err) {
+                        // Тихо игнорируем — на iOS Safari это нормально
+                    });
+                });
+            }
+        } catch (e) { }
+
+        /* ============================================================
+           PWA: Кнопка "Установить приложение" (Android / ПК)
+           На iOS этого события нет — кнопка не появится, это норм.
+           ============================================================ */
+        try {
+            var deferredPrompt = null;
+            var installBtn = document.createElement('button');
+            installBtn.type = 'button';
+            installBtn.textContent = '⬇ Установить приложение';
+            installBtn.className = 'btn';
+            installBtn.style.display = 'none';
+            installBtn.style.marginTop = '0';
+            installBtn.style.background = 'rgba(255,255,255,0.15)';
+            installBtn.style.color = '#fff';
+            installBtn.style.border = '1px solid rgba(255,255,255,0.25)';
+
+            window.addEventListener('beforeinstallprompt', function (e) {
+                e.preventDefault();
+                deferredPrompt = e;
+                installBtn.style.display = 'block';
+            });
+
+            installBtn.addEventListener('click', function () {
+                if (!deferredPrompt) return;
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(function () {
+                    deferredPrompt = null;
+                    installBtn.style.display = 'none';
+                });
+            });
+
+            var translateBtnEl = document.getElementById('translateBtn');
+            if (translateBtnEl && translateBtnEl.parentNode) {
+                translateBtnEl.parentNode.insertBefore(installBtn, translateBtnEl.nextSibling);
+            }
+        } catch (e) { }
+
+        /* ============================================================
+           ДИАГНОСТИКА: покажет ошибку прямо на странице
+           ============================================================ */
+        window.addEventListener('error', function (e) {
+            if (statsEl) {
+                statsEl.textContent = 'Ошибка: ' + (e.message || 'unknown');
+                statsEl.style.color = '#ff8a8a';
+            }
+        });
+    </script>
+</body>
+
+</html>
